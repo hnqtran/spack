@@ -3,6 +3,7 @@
 #
 # SPDX-License-Identifier: (Apache-2.0 OR MIT)
 
+import os
 import sys
 import tempfile
 
@@ -44,11 +45,12 @@ class PyTensorflow(Package, CudaPackage, ROCmPackage, PythonExtension):
 
     license("Apache-2.0")
 
+    version("2.16.2", sha256="023849bf253080cb1e4f09386f5eb900492da2288274086ed6cfecd6d99da9eb")
     version("2.16.1", sha256="c729e56efc945c6df08efe5c9f5b8b89329c7c91b8f40ad2bb3e13900bd4876d")
     version(
         "2.16-rocm-enhanced",
-        git="https://github.com/ROCm/tensorflow-upstream.git",
-        branch="r2.16-rocm-enhanced",
+        sha256="6765e85675734b8fe17bca3c0669aec2f9ee97699b413780bcf3c6f00661ce72",
+        url="https://github.com/ROCm/tensorflow-upstream/archive/refs/tags/r2.16-rocm-enhanced.tar.gz",
     )
     version("2.15.1", sha256="f36416d831f06fe866e149c7cd752da410a11178b01ff5620e9f265511ed57cf")
     version("2.15.0", sha256="9cec5acb0ecf2d47b16891f8bc5bc6fbfdffe1700bdadc0d9ebe27ea34f0c220")
@@ -222,6 +224,8 @@ class PyTensorflow(Package, CudaPackage, ROCmPackage, PythonExtension):
     depends_on("py-numpy@1.19.2:1.19", type=("build", "run"), when="@2.4:2.6")
     # https://github.com/tensorflow/tensorflow/issues/40688
     depends_on("py-numpy@1.16.0:1.18", type=("build", "run"), when="@:2.3")
+    # https://github.com/tensorflow/tensorflow/issues/67291
+    depends_on("py-numpy@:1", type=("build", "run"))
     depends_on("py-opt-einsum@2.3.2:", type=("build", "run"), when="@:2.3,2.7:")
     depends_on("py-opt-einsum@3.3", type=("build", "run"), when="@2.4:2.6")
     depends_on("py-packaging", type=("build", "run"), when="@2.9:")
@@ -305,12 +309,12 @@ class PyTensorflow(Package, CudaPackage, ROCmPackage, PythonExtension):
         depends_on("cuda@:11.4", when="@2.4:2.7")
         depends_on("cuda@:10.2", when="@:2.3")
 
-        depends_on("cudnn@8.9:", when="@2.15:")
-        depends_on("cudnn@8.7:", when="@2.14:")
-        depends_on("cudnn@8.6:", when="@2.12:")
-        depends_on("cudnn@8.1:", when="@2.5:")
-        depends_on("cudnn@8.0:", when="@2.4:")
-        depends_on("cudnn@7.6:", when="@2.1:")
+        depends_on("cudnn@8.9:8", when="@2.15:")
+        depends_on("cudnn@8.7:8", when="@2.14:")
+        depends_on("cudnn@8.6:8", when="@2.12:")
+        depends_on("cudnn@8.1:8", when="@2.5:")
+        depends_on("cudnn@8.0:8", when="@2.4:")
+        depends_on("cudnn@7.6:8", when="@2.1:")
 
         depends_on("cudnn@:7", when="@:2.2")
     # depends_on('tensorrt', when='+tensorrt')
@@ -414,10 +418,28 @@ class PyTensorflow(Package, CudaPackage, ROCmPackage, PythonExtension):
     # and https://github.com/abseil/abseil-cpp/issues/1665
     patch("absl_neon.patch", when="@2.16.1: target=aarch64:")
 
-    patch("Find_ROCm_Components_Individiually.2.16.patch", when="@2.16-rocm-enhanced +rocm")
-    patch("Find_ROCm_Components_Individiually.patch", when="@2.14-rocm-enhanced +rocm")
-    patch("set_jit_trueLT_false.patch", when="@2.14-rocm-enhanced: +rocm")
-
+    # reverting change otherwise the c467913 commit patch won't apply
+    patch(
+        "https://github.com/ROCm/tensorflow-upstream/commit/fd6b0a4356c66f5f30cedbc62b24f18d9e32806f.patch?full_index=1",
+        sha256="43f1519dfc618b4fb568f760d559c063234248fa12c47a35c1cf3b7114756424",
+        when="@2.16-rocm-enhanced +rocm",
+        reverse=True,
+    )
+    patch(
+        "https://github.com/ROCm/tensorflow-upstream/commit/c467913bf4411ce2681391f37a9adf6031d23c2c.patch?full_index=1",
+        sha256="82554a84d19d99180a6bec274c6106dd217361e809b446e2e4bc4b6b979bdf7a",
+        when="@2.16-rocm-enhanced +rocm",
+    )
+    patch(
+        "https://github.com/ROCm/tensorflow-upstream/commit/f4f4e8698b90755b0b5ea2d9da1933b0b988b111.patch?full_index=1",
+        sha256="a4c0fd62a0af3ba113c8933fa531dd17fa6667e507202a144715cd87fbdaf476",
+        when="@2.16-rocm-enhanced: +rocm",
+    )
+    patch(
+        "https://github.com/ROCm/tensorflow-upstream/commit/8b7fcccb2914078737689347540cb79ace579bbb.patch?full_index=1",
+        sha256="75a61a79ce3aae51fda920f677f4dc045374b20e25628626eb37ca19c3a3b4c4",
+        when="@2.16-rocm-enhanced +rocm",
+    )
     phases = ["configure", "build", "install"]
 
     # https://www.tensorflow.org/install/source
@@ -727,9 +749,16 @@ class PyTensorflow(Package, CudaPackage, ROCmPackage, PythonExtension):
                 f.write('build --action_env LD_LIBRARY_PATH="' + slibs + '"')
 
         if spec.satisfies("@2.16-rocm-enhanced +rocm"):
-            filter_file(
-                "/usr/lib/llvm-17/bin/clang", spec["llvm-amdgpu"].prefix.bin.clang, ".bazelrc"
-            )
+            if os.path.exists(spec["llvm-amdgpu"].prefix.bin.clang):
+                filter_file(
+                    "/usr/lib/llvm-17/bin/clang", spec["llvm-amdgpu"].prefix.bin.clang, ".bazelrc"
+                )
+            else:
+                filter_file(
+                    "/usr/lib/llvm-17/bin/clang",
+                    spec["llvm-amdgpu"].prefix.llvm.bin.clang,
+                    ".bazelrc",
+                )
 
         filter_file("build:opt --copt=-march=native", "", ".tf_configure.bazelrc")
         filter_file("build:opt --host_copt=-march=native", "", ".tf_configure.bazelrc")
@@ -796,8 +825,12 @@ class PyTensorflow(Package, CudaPackage, ROCmPackage, PythonExtension):
         if "~nccl" in spec:
             args.append("--config=nonccl")
 
-        if "+numa" in spec:
-            args.append("--config=numa")
+        # https://github.com/tensorflow/tensorflow/issues/63080
+        if self.spec.satisfies("@2.14:"):
+            args.append(f"--define=with_numa_support={'+numa' in spec}")
+        else:
+            if "+numa" in spec:
+                args.append("--config=numa")
 
         args.append("--config=v2")
 
