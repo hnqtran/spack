@@ -18,7 +18,7 @@ class SmokeOneapi(MakefilePackage):
     maintainers("hnqtran")
 
     depends_on("intel-oneapi-compilers")
-    depends_on("ioapi-oneapi ^oneapi")
+    depends_on("ioapi-oneapi")
 
     def edit(self, spec, prefix):
         

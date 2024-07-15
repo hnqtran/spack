@@ -18,9 +18,9 @@ class IoapiLarge(MakefilePackage):
     maintainers("hnqtran")
 
     depends_on("intel-oneapi-compilers")
-    depends_on("hdf5@1.14.3 %oneapi -shared -mpi +cxx +fortran +hl ^szip ^zlib")
-    depends_on("netcdf-c@4.9.2 %oneapi -mpi -shared -dap ^hdf5")
-    depends_on("netcdf-fortran@4.6.1 %oneapi -shared ^netcdf-c")
+    depends_on("hdf5")# %oneapi -shared -mpi +cxx +fortran +hl ^szip ^zlib")
+    depends_on("netcdf-c")# %oneapi -mpi -shared -dap ^hdf5")
+    depends_on("netcdf-fortran")#@4.6.1 %oneapi -shared ^netcdf-c")
     depends_on("sed", type="build")
 
     def edit(self, spec, prefix):
